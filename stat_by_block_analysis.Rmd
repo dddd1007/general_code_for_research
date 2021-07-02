@@ -1,0 +1,100 @@
+---
+title: "stat_by_block_analysis_color7525_space2575"
+output:
+  html_document:
+    df_print: paged
+---
+
+## Read the csv file 
+```{r}
+library(tidyverse)
+library(knitr)
+library(Rtinlingwang)
+
+mydata <- data.frame()
+path <- "data/Results_Stat_Ratio_EEG"
+for (i in 1:6) {
+  filepath <- paste0(path, as.character(i), ".csv")
+  mydata <- rbind(mydata, Results_Stat_Ratio_extractor(filepath, i))
+}
+
+colnames(mydata)[1] <- "Subjects"
+mydata$Subjects <- str_replace(mydata$Subjects, pattern = "-LearnPC_.*_.*_correct_mark_block[1-6]", replacement = "")
+mydata <- arrange(mydata, Subjects)
+head(mydata)
+```
+
+## Analysis RT
+```{r}
+RT_data <- filter(mydata, type == "RT")
+error_rate_data <- filter(mydata, type == "error_rate")
+
+RT_mean_table <- RT_data %>% 
+  group_by(block) %>% 
+  summarise(SCCC = mean(`SpaceCon.ColorCon`), SCCI = mean(`SpaceCon.ColorInC`),
+            SICC = mean(`SpaceInC.ColorCon`), SICI = mean(`SpaceInC.ColorInC`))
+
+kable(RT_mean_table)
+
+simon_effect_table <- RT_mean_table %>% 
+  group_by(block) %>% 
+  summarise(space_simon = mean(c((SICC - SCCC), (SICI - SCCI))),
+            color_simon = mean(c((SCCI - SCCC), (SICI - SICC))))
+
+simon_effect_table_sep <- RT_mean_table %>% 
+  mutate(Space_simon_CC = SICC-SCCC, Space_simon_CI = SICI - SCCI,
+         color_simon_SC = SCCI-SCCC, color_simon_SI = SICI - SICC )
+
+kable(simon_effect_table_sep)
+
+simon_effect_table_sep[1:3,] -> a
+apply(a[,6:9], 2, mean) -> a
+
+simon_effect_table_sep[4:6,] ->b 
+apply(b[6:9], 2, mean) -> b
+
+simon_effect_by_3blocks <- rbind(block_1_3 = a,
+                                 block_4_6 = b)
+kable(simon_effect_by_3blocks)
+
+simon_effect_table_plot <- gather(simon_effect_table,type,effect,-block)
+
+ggplot(simon_effect_table_plot, aes(x = block, y = effect, group = type, color = type)) + geom_line(size = 1)
+```
+
+## Analysis the error rate
+```{r}
+error_mean_table <- error_rate_data %>% 
+  group_by(block) %>% 
+  summarise(SCCC = mean(`SpaceCon.ColorCon`), SCCI = mean(`SpaceCon.ColorInC`),
+            SICC = mean(`SpaceInC.ColorCon`), SICI = mean(`SpaceInC.ColorInC`))
+
+write.csv(error_mean_table, "error_mean_table.csv")
+
+kable(error_mean_table)
+
+error_rate_table <- error_mean_table %>% 
+  group_by(block) %>% 
+  summarise(space = mean(c((SICC - SCCC), (SICI - SCCI))),
+            color = mean(c((SCCI - SCCC), (SICI - SICC))))
+
+kable(error_rate_table)
+
+error_rate_table_plot <- gather(error_rate_table, type, error_rate, -block)
+
+ggplot(error_rate_table_plot, aes(x = block, y = error_rate, group = type, color = type)) + geom_line(size = 1)
+```
+
+## Check the stablility of those data between subjects
+```{r}
+# the simon effect
+RT_data %>% 
+  group_by(Subjects, block) %>% 
+  summarise(SCCC = mean(`SpaceCon.ColorCon`), SCCI = mean(`SpaceCon.ColorInC`),
+            SICC = mean(`SpaceInC.ColorCon`), SICI = mean(`SpaceInC.ColorInC`)) %>% 
+  gather(type, Value, SCCC, SCCI, SICC, SICI) %>% 
+  ggplot(aes(x = block, y = Value)) +
+    geom_point(aes(color = Subjects)) +
+    facet_grid(type~.)
+```
+
